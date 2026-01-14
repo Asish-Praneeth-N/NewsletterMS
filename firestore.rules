@@ -1,63 +1,74 @@
 rules_version = '2';
 
 service cloud.firestore {
-  match /databases/{database}/documents {
+  match /databases/{db}/documents {
 
-    // Helper function to get the current user's role
-    function getRole() {
-      // Check if the user doc exists before trying to access it
-      return exists(/databases/$(database)/documents/users/$(request.auth.uid)) 
-        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role 
-        : null;
-    }
+    // --- Helpers ---
 
-    // Helper checks
-    function isSignedIn() {
+    function isAuth() {
       return request.auth != null;
     }
-    
-    function isOwner(userId) {
-      return request.auth.uid == userId;
+
+    // Fetch the requester's full user document
+    function getRequesterData() {
+      return get(/databases/$(db)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function getRequesterRole() {
+      return getRequesterData().role;
     }
 
     function isAdmin() {
-      return getRole() == 'admin' || getRole() == 'super_admin';
+      return isAuth() && (getRequesterRole() == 'admin' || getRequesterRole() == 'super_admin');
     }
 
     function isSuperAdmin() {
-      return getRole() == 'super_admin';
+      return isAuth() && getRequesterRole() == 'super_admin';
     }
+
+    // --- Collection Rules ---
 
     // Users Collection
-    match /users/{userId} {
-      // 1. CREATE: Allow new users to create their own document
-      // Strict validation: Must set role to 'user' and default fields
-      allow create: if isSignedIn() && isOwner(userId)
-        && request.resource.data.role == 'user'
-        && request.resource.data.adminRequest == false;
+    match /users/{uid} {
+      // READ: 
+      // 1. User can read their own profile.
+      // 2. Admins and Super Admins can list/read all profiles (for dashboards).
+      allow read: if isAuth() && (request.auth.uid == uid || isAdmin());
 
-      // 2. READ: Users can read their own document, Admins can read all
-      allow read: if isSignedIn() && (isOwner(userId) || isAdmin());
-      
-      // 3. UPDATE: Users can update specific fields (like adminRequest)
-      // They cannot change their own role
-      allow update: if isSignedIn() && isOwner(userId) 
-        && request.resource.data.role == resource.data.role; // Role must remain unchanged
-      
-      // 4. LIST: Admins/Super Admins can list users
-      allow list: if isSignedIn() && isAdmin();
+      // CREATE:
+      // Allow new users to sign up. Must set role to 'user' and not be an admin request yet.
+      allow create: if isAuth() 
+                    && request.auth.uid == uid 
+                    && request.resource.data.role == "user"
+                    && request.resource.data.adminRequest == false;
 
-      // 5. SUPER ADMIN: Full write access (overrides others if true)
-      allow write: if isSignedIn() && isSuperAdmin();
+      // UPDATE:
+      // 1. Super Admin can update anything (Roles, etc).
+      // 2. User can update their own data BUT CANNOT change their role.
+      allow update: if isSuperAdmin() 
+                    || (isAuth() && request.auth.uid == uid && request.resource.data.role == resource.data.role);
     }
 
-    // Newsletters/Posts Collection (Example)
-    match /newsletters/{newsletterId} {
-      allow read: if true; 
-      allow write: if isSignedIn() && isAdmin();
+    // Newsletters Collection
+    match /newsletters/{id} {
+      // Everyone can read published newsletters
+      allow read: if resource.data.status == "published";
+      
+      // Admins and Super Admins can read all (drafts, etc)
+      allow read: if isAdmin(); // Recursive 'read' allows getting single docs. List permissions implied by query constraints matching this.
+
+      // Admins/Super Admins can create, update, delete
+      allow create, update, delete: if isAdmin(); 
     }
-    
-    // Default block
+
+    // Subscriptions Collection
+    match /subscriptions/{id} {
+      // Users can manage their own subscriptions
+      allow create: if isAuth() && request.resource.data.userId == request.auth.uid;
+      allow read, delete: if isAuth() && resource.data.userId == request.auth.uid;
+    }
+
+    // Default: Deny all
     match /{document=**} {
       allow read, write: if false;
     }

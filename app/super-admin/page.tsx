@@ -56,28 +56,72 @@ export default function SuperAdminDashboard() {
         }
     }, [role]);
 
-    const handleRoleUpdate = async (uid: string, newRole: Role) => {
-        try {
-            const userRef = doc(db, "users", uid);
-            await updateDoc(userRef, {
-                role: newRole,
-                adminRequest: false // Clear request if promoted/demoted
-            });
-            // Toast success (can add shadcn toast later)
-        } catch (error) {
-            console.error("Failed to update role", error);
+    const [successMsg, setSuccessMsg] = useState<string | null>(null);
+    const [confirmModal, setConfirmModal] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: string;
+        onConfirm: () => void;
+        type: "danger" | "info";
+    }>({
+        isOpen: false,
+        title: "",
+        message: "",
+        onConfirm: () => { },
+        type: "info"
+    });
+
+    // Clear success message after 3 seconds
+    useEffect(() => {
+        if (successMsg) {
+            const timer = setTimeout(() => setSuccessMsg(null), 3000);
+            return () => clearTimeout(timer);
         }
+    }, [successMsg]);
+
+    const handleRoleUpdate = (uid: string, newRole: Role) => {
+        setConfirmModal({
+            isOpen: true,
+            title: "Change User Role",
+            message: `Are you sure you want to change this user's role to ${newRole}? This will affect their permissions immediately.`,
+            type: "info",
+            onConfirm: async () => {
+                try {
+                    const userRef = doc(db, "users", uid);
+                    await updateDoc(userRef, {
+                        role: newRole,
+                        adminRequest: false
+                    });
+                    setSuccessMsg(`User role updated to ${newRole}`);
+                    setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                } catch (error: any) {
+                    console.error("Failed to update role", error);
+                    alert("Error: " + error.message);
+                }
+            }
+        });
     };
 
-    const handleRejectRequest = async (uid: string) => {
-        try {
-            const userRef = doc(db, "users", uid);
-            await updateDoc(userRef, {
-                adminRequest: false
-            });
-        } catch (error) {
-            console.error("Failed to reject request", error);
-        }
+    const handleRejectRequest = (uid: string) => {
+        setConfirmModal({
+            isOpen: true,
+            title: "Reject Admin Request",
+            message: "Are you sure you want to reject this request? The user will remain a standard user.",
+            type: "danger",
+            onConfirm: async () => {
+                try {
+                    const userRef = doc(db, "users", uid);
+                    await updateDoc(userRef, {
+                        adminRequest: false
+                    });
+                    setSuccessMsg("Admin request rejected");
+                    setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                } catch (error: any) {
+                    console.error("Failed to reject request", error);
+                    alert("Error: " + error.message);
+                }
+            }
+        });
     };
 
     if (loading || fetching) {
@@ -88,7 +132,7 @@ export default function SuperAdminDashboard() {
         );
     }
 
-    if (role !== "super_admin") return null; // Prevent flash
+    if (role !== "super_admin") return null;
 
     const pendingRequests = users.filter(u => u.adminRequest === true && u.role === "user");
     const allUsersList = users;
@@ -106,7 +150,7 @@ export default function SuperAdminDashboard() {
                         <p className="text-neutral-500">Highest clearance level. Manage system access.</p>
                     </div>
                     <button
-                        onClick={() => logout()} // Use the logout function from useAuth
+                        onClick={() => logout()}
                         className="px-4 py-2 bg-neutral-900 border border-neutral-800 rounded-lg text-sm text-neutral-400 hover:text-white hover:border-white transition-colors"
                     >
                         Sign Out
@@ -217,6 +261,49 @@ export default function SuperAdminDashboard() {
                     </div>
                 </section>
 
+                {/* Custom Confirmation Modal */}
+                {confirmModal.isOpen && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+                        <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-6 max-w-sm w-full shadow-2xl scale-100 animate-in zoom-in-95 duration-200">
+                            <h3 className="text-lg font-serif font-semibold text-white mb-2">{confirmModal.title}</h3>
+                            <p className="text-neutral-400 text-sm mb-6 leading-relaxed">
+                                {confirmModal.message}
+                            </p>
+                            <div className="flex justify-end gap-3">
+                                <button
+                                    onClick={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+                                    className="px-4 py-2 text-sm text-neutral-400 hover:text-white transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={confirmModal.onConfirm}
+                                    className={`px-4 py-2 text-sm rounded-lg font-medium transition-colors ${confirmModal.type === 'danger'
+                                        ? 'bg-red-900/50 text-red-400 hover:bg-red-900 border border-red-900/50'
+                                        : 'bg-indigo-900/50 text-indigo-400 hover:bg-indigo-900 border border-indigo-900/50'
+                                        }`}
+                                >
+                                    Confirm
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Fixed Toast Notification */}
+                {successMsg && (
+                    <div className="fixed bottom-8 right-8 z-50 animate-in fade-in slide-in-from-bottom-5 duration-300">
+                        <div className="bg-neutral-900/90 border border-emerald-900/50 text-white pl-4 pr-6 py-4 rounded-xl shadow-2xl flex items-center gap-4 backdrop-blur-lg">
+                            <div className="w-10 h-10 rounded-full bg-emerald-900/30 flex items-center justify-center text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.2)]">
+                                <Check size={20} strokeWidth={2.5} />
+                            </div>
+                            <div>
+                                <h4 className="font-semibold text-emerald-400 text-sm tracking-wide uppercase">System Update</h4>
+                                <p className="text-sm text-neutral-300">{successMsg}</p>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );
