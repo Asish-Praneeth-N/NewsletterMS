@@ -18,14 +18,15 @@ interface Newsletter {
     authorEmail?: string;
 }
 
-export default function NewsletterList() {
+export default function SuperAdminNewsletterList() {
     const { role } = useAuth();
     const [newsletters, setNewsletters] = useState<Newsletter[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState("");
     const [filterStatus, setFilterStatus] = useState<"all" | "draft" | "published">("all");
 
-
+    // Guard handled by middleware, but redundancy is safe
+    if (role !== "super_admin") return null;
 
     useEffect(() => {
         const q = query(collection(db, "newsletters"), orderBy("updatedAt", "desc"));
@@ -39,11 +40,11 @@ export default function NewsletterList() {
         });
 
         return () => unsubscribe();
-    }, [role]);
+    }, []);
 
     const handleDelete = async (id: string, e: React.MouseEvent) => {
-        e.preventDefault(); // Prevent Link click if nested
-        if (confirm("Are you sure you want to delete this newsletter?")) {
+        e.preventDefault();
+        if (confirm("Are you sure you want to delete this newsletter? This action cannot be undone.")) {
             await deleteDoc(doc(db, "newsletters", id));
         }
     };
@@ -54,8 +55,6 @@ export default function NewsletterList() {
         return matchesSearch && matchesStatus;
     });
 
-    if (role !== "admin" && role !== "super_admin") return null;
-
     return (
         <div className="min-h-screen bg-black text-white p-8">
             <div className="max-w-7xl mx-auto">
@@ -63,11 +62,11 @@ export default function NewsletterList() {
                 {/* Header & Controls */}
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
                     <div>
-                        <h1 className="text-3xl font-serif font-bold mb-2">Content Library</h1>
-                        <p className="text-neutral-500">Manage all your newsletters and drafts.</p>
+                        <h1 className="text-3xl font-serif font-bold mb-2">Global Content Registry</h1>
+                        <p className="text-neutral-500">Oversee all newsletters across the platform.</p>
                     </div>
                     <Link
-                        href="/admin/newsletters/new"
+                        href="/super-admin/newsletters/new"
                         className="bg-white text-black px-5 py-2.5 rounded-full font-medium hover:bg-gray-200 transition-colors flex items-center gap-2 self-start md:self-auto shadow-lg shadow-white/10"
                     >
                         <Plus size={20} /> New Newsletter
@@ -80,7 +79,7 @@ export default function NewsletterList() {
                         <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500" />
                         <input
                             type="text"
-                            placeholder="Search..."
+                            placeholder="Search titles..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             className="w-full bg-transparent border-none outline-none text-white pl-10 pr-4 py-2 text-sm placeholder-neutral-600"
@@ -120,8 +119,8 @@ export default function NewsletterList() {
                             {/* Content */}
                             <div className="flex-1 min-w-0 mr-6">
                                 <div className="flex items-center gap-3 mb-1">
-                                    <h3 className="text-lg font-medium text-white truncate group-hover:text-indigo-400 transition-colors">
-                                        <Link href={`/admin/newsletters/${post.id}`}>{post.title || "Untitled Draft"}</Link>
+                                    <h3 className="text-lg font-medium text-white truncate group-hover:text-red-400 transition-colors">
+                                        <Link href={`/super-admin/newsletters/${post.id}`}>{post.title || "Untitled Draft"}</Link>
                                     </h3>
                                     <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider border ${post.status === 'published' ? 'bg-emerald-950/50 text-emerald-500 border-emerald-900/50' :
                                         'bg-neutral-800 text-neutral-400 border-neutral-700'
@@ -136,13 +135,19 @@ export default function NewsletterList() {
                                     </span>
                                     <span>•</span>
                                     <span className="font-mono">{post.slug}</span>
+                                    {post.authorEmail && (
+                                        <>
+                                            <span>•</span>
+                                            <span className="text-neutral-400">by {post.authorEmail}</span>
+                                        </>
+                                    )}
                                 </div>
                             </div>
 
                             {/* Actions */}
                             <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                                 <Link
-                                    href={`/admin/newsletters/${post.id}`}
+                                    href={`/super-admin/newsletters/${post.id}`}
                                     className="p-2 text-neutral-400 hover:text-white bg-neutral-800/50 hover:bg-neutral-700 rounded-lg transition-colors"
                                     title="Edit"
                                 >
@@ -162,8 +167,8 @@ export default function NewsletterList() {
                     {filteredNewsletters.length === 0 && !loading && (
                         <div className="text-center py-24 border border-dashed border-neutral-800 rounded-xl bg-neutral-900/10">
                             <p className="text-neutral-500 text-lg mb-2">No newsletters found.</p>
-                            <Link href="/admin/newsletters/new" className="text-indigo-400 hover:underline">
-                                Create your first post
+                            <Link href="/super-admin/newsletters/new" className="text-red-400 hover:underline">
+                                Create a newsletter
                             </Link>
                         </div>
                     )}

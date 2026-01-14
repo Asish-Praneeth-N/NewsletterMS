@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
-import { LayoutDashboard, Users, Shield, ClipboardList, UserCog, LogOut, Menu, X, ChevronDown, Lock } from "lucide-react";
+import { LayoutDashboard, Users, Shield, ClipboardList, UserCog, LogOut, Menu, X, ChevronDown, Lock, FileText, BarChart3 } from "lucide-react";
 import { useState } from "react";
 
 export default function SuperAdminNavbar() {
@@ -13,7 +13,9 @@ export default function SuperAdminNavbar() {
     const [isProfileOpen, setIsProfileOpen] = useState(false);
 
     const navItems = [
-        { name: "System", href: "/super-admin", icon: <LayoutDashboard size={18} /> },
+        { name: "Overview", href: "/super-admin", icon: <LayoutDashboard size={18} /> },
+        { name: "Newsletters", href: "/super-admin/newsletters", icon: <FileText size={18} /> },
+        { name: "Analytics", href: "/super-admin/analytics", icon: <BarChart3 size={18} /> },
         { name: "Users", href: "/super-admin/users", icon: <Users size={18} /> },
         { name: "Roles", href: "/super-admin/roles", icon: <Shield size={18} /> },
         { name: "Audit Logs", href: "/super-admin/audit-logs", icon: <ClipboardList size={18} /> },
@@ -44,8 +46,8 @@ export default function SuperAdminNavbar() {
                                         key={item.href}
                                         href={item.href}
                                         className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${isActive
-                                                ? "bg-red-950/40 text-red-400 border border-red-900/50 shadow-[0_0_10px_rgba(220,38,38,0.1)]"
-                                                : "text-neutral-400 hover:text-white hover:bg-white/5"
+                                            ? "bg-red-950/40 text-red-400 border border-red-900/50 shadow-[0_0_10px_rgba(220,38,38,0.1)]"
+                                            : "text-neutral-400 hover:text-white hover:bg-white/5"
                                             }`}
                                     >
                                         {item.icon}
@@ -121,8 +123,8 @@ export default function SuperAdminNavbar() {
                                     href={item.href}
                                     onClick={() => setIsMenuOpen(false)}
                                     className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors ${isActive
-                                            ? "bg-red-900/20 text-red-400 border border-red-900/50"
-                                            : "text-neutral-400 hover:text-white hover:bg-neutral-800"
+                                        ? "bg-red-900/20 text-red-400 border border-red-900/50"
+                                        : "text-neutral-400 hover:text-white hover:bg-neutral-800"
                                         }`}
                                 >
                                     {item.icon}
