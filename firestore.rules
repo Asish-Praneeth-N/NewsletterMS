@@ -9,22 +9,24 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // Fetch the requester's full user document
-    function getRequesterData() {
-      return get(/databases/$(db)/documents/users/$(request.auth.uid)).data;
+    function userPath() {
+      return /databases/$(db)/documents/users/$(request.auth.uid);
+    }
+
+    function isUserExists() {
+      return exists(userPath());
     }
 
     function getRequesterRole() {
-      // Safely get role, default to 'user' if missing (though app ensures it exists)
-      return getRequesterData().role;
+      return isAuth() && isUserExists() ? get(userPath()).data.role : null;
     }
 
     function isAdmin() {
-      return isAuth() && (getRequesterRole() == 'admin' || getRequesterRole() == 'super_admin');
+      return getRequesterRole() == 'admin' || getRequesterRole() == 'super_admin';
     }
 
     function isSuperAdmin() {
-      return isAuth() && getRequesterRole() == 'super_admin';
+      return getRequesterRole() == 'super_admin';
     }
 
     // --- Collection Rules ---
@@ -64,23 +66,28 @@ service cloud.firestore {
 
     // Subscriptions Collection
     match /subscriptions/{id} {
-      // Users can manage their subscriptions
-      allow create: if isAuth() && request.resource.data.userId == request.auth.uid;
-      // Allow reading/deleting own subscriptions
-      // Admins/SuperAdmin can read all for dashboard stats
+      // Users can manage their subscriptions (create, delete)
+      // We allow 'write' (create/update/delete) as long as they own it.
+      // Although strictly we might only need create/delete, 'setDoc' can look like an update.
       allow read: if (isAuth() && resource.data.userId == request.auth.uid) || isAdmin();
-      allow delete: if isAuth() && resource.data.userId == request.auth.uid;
+      allow write: if isAuth() && (request.resource.data.userId == request.auth.uid || resource.data.userId == request.auth.uid);
     }
 
-    // [NEW] Audit Logs Collection (Super Admin Only)
-    match /auditLogs/{id} {
-      // Only Super Admin can read/write logs
-      // Note: We allow 'create' because standard Admins might trigger audit events too 
-      // if we expand later, but for now Super Admin Logic handles it.
-      // If your app logic writes logs from client for Admin actions, use isAdmin().
-      // Based on current code: SuperAdminUsers/Roles pages write logs.
-      allow read: if isSuperAdmin();
-      allow create: if isSuperAdmin(); // Strict: Only Super Admin actions are logged client-side for now
+    // Community Posts (Discussions)
+    match /community_posts/{id} {
+       // Anyone authenticated can read
+       allow read: if isAuth();
+       // Create: must be author
+       allow create: if isAuth() && request.resource.data.authorId == request.auth.uid;
+       // Update/Delete: Author or Admin
+       allow update, delete: if isAuth() && (resource.data.authorId == request.auth.uid || isAdmin());
+    }
+
+    // Bookmarks (Saved Newsletters)
+    match /bookmarks/{id} {
+       // Users can only access their own bookmarks
+       allow read: if isAuth() && resource.data.userId == request.auth.uid;
+       allow write: if isAuth() && (request.resource.data.userId == request.auth.uid || resource.data.userId == request.auth.uid);
     }
 
     // Default: Deny all

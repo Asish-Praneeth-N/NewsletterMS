@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { collection, query, where, getDocs, doc, setDoc } from "firebase/firestore";
+import { collection, query, where, getDocs, doc, setDoc, deleteDoc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
 import { UserNavbar } from "@/app/components/layout/UserNavbar";
@@ -17,6 +17,8 @@ export default function NewsletterReader() {
     const [loading, setLoading] = useState(true);
     const [subscribing, setSubscribing] = useState(false);
     const [isSubscribed, setIsSubscribed] = useState(false);
+    const [isBookmarked, setIsBookmarked] = useState(false);
+    const [bookmarkLoading, setBookmarkLoading] = useState(false);
 
     useEffect(() => {
         async function fetchPost() {
@@ -46,20 +48,38 @@ export default function NewsletterReader() {
     }, [params.slug]);
 
     useEffect(() => {
+        if (!user || !post) return;
+
         // Check subscription status
         async function checkSub() {
             if (!user || !post) return;
-            // Simplified check: usually we'd query the subscriptions collection
-            // For now, let's just default to false as we haven't implemented the strict sub check logic here yet
+            try {
+                const subDoc = await getDoc(doc(db, "subscriptions", `${user.uid}_${post.id}`));
+                setIsSubscribed(subDoc.exists());
+            } catch (e) {
+                console.error("Error checking sub:", e);
+            }
         }
+
+        // Check bookmark status
+        async function checkBookmark() {
+            if (!user || !post) return;
+            try {
+                const bookmarkDoc = await getDoc(doc(db, "bookmarks", `${user.uid}_${post.id}`));
+                setIsBookmarked(bookmarkDoc.exists());
+            } catch (e) {
+                console.error("Error checking bookmark:", e);
+            }
+        }
+
         checkSub();
+        checkBookmark();
     }, [user, post]);
 
     const handleSubscribe = async () => {
         if (!user || !post) return;
         setSubscribing(true);
         // Implement subscription logic
-        // For MVP spec, we just simulate or add to 'subscriptions' collection
         try {
             await setDoc(doc(db, "subscriptions", `${user.uid}_${post.id}`), {
                 userId: user.uid,
@@ -71,6 +91,50 @@ export default function NewsletterReader() {
             console.error(e);
         } finally {
             setSubscribing(false);
+        }
+    };
+
+    const handleBookmark = async () => {
+        if (!user || !post) return;
+        setBookmarkLoading(true);
+        try {
+            const bookmarkRef = doc(db, "bookmarks", `${user.uid}_${post.id}`);
+            if (isBookmarked) {
+                await deleteDoc(bookmarkRef);
+                setIsBookmarked(false);
+            } else {
+                await setDoc(bookmarkRef, {
+                    userId: user.uid,
+                    newsletterId: post.id,
+                    title: post.title, // Store minimal data for list view
+                    slug: post.slug,
+                    heroImageUrl: post.heroImageUrl || "",
+                    savedAt: new Date()
+                });
+                setIsBookmarked(true);
+            }
+        } catch (e) {
+            console.error("Error toggling bookmark:", e);
+        } finally {
+            setBookmarkLoading(false);
+        }
+    };
+
+    const handleShare = async () => {
+        if (navigator.share) {
+            try {
+                await navigator.share({
+                    title: post.title,
+                    text: `Read "${post.title}" on NewsEcho`,
+                    url: window.location.href,
+                });
+            } catch (err) {
+                console.log('Error sharing:', err);
+            }
+        } else {
+            // Fallback to clipboard
+            navigator.clipboard.writeText(window.location.href);
+            alert("Link copied to clipboard!");
         }
     };
 
@@ -129,10 +193,19 @@ export default function NewsletterReader() {
                         </div>
 
                         <div className="flex items-center gap-4">
-                            <button className="p-2 text-neutral-400 hover:text-white transition-colors" title="Bookmark">
-                                <Bookmark size={20} />
+                            <button
+                                onClick={handleBookmark}
+                                disabled={bookmarkLoading}
+                                className={`p-2 transition-colors ${isBookmarked ? "text-indigo-400 hover:text-indigo-300" : "text-neutral-400 hover:text-white"}`}
+                                title={isBookmarked ? "Remove Bookmark" : "Bookmark"}
+                            >
+                                <Bookmark size={20} fill={isBookmarked ? "currentColor" : "none"} />
                             </button>
-                            <button className="p-2 text-neutral-400 hover:text-white transition-colors" title="Share">
+                            <button
+                                onClick={handleShare}
+                                className="p-2 text-neutral-400 hover:text-white transition-colors"
+                                title="Share"
+                            >
                                 <Share2 size={20} />
                             </button>
                         </div>
@@ -165,8 +238,8 @@ export default function NewsletterReader() {
                             onClick={handleSubscribe}
                             disabled={subscribing || isSubscribed}
                             className={`px-8 py-3 rounded-full font-medium transition-all ${isSubscribed
-                                    ? "bg-emerald-900/30 text-emerald-400 border border-emerald-900 cursor-default"
-                                    : "bg-white text-black hover:bg-neutral-200 shadow-lg shadow-white/10"
+                                ? "bg-emerald-900/30 text-emerald-400 border border-emerald-900 cursor-default"
+                                : "bg-white text-black hover:bg-neutral-200 shadow-lg shadow-white/10"
                                 }`}
                         >
                             {isSubscribed ? (

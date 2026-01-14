@@ -3,9 +3,9 @@
 import { useAuth } from "../../context/AuthContext";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Loader2, ArrowRight, BookOpen, Star, Zap } from "lucide-react";
+import { Loader2, ArrowRight, BookOpen, Star, Zap, Clock } from "lucide-react";
 import { UserNavbar } from "../components/layout/UserNavbar";
-import { collection, query, where, orderBy, limit, onSnapshot } from "firebase/firestore";
+import { collection, query, where, orderBy, limit, onSnapshot, doc, getDoc } from "firebase/firestore";
 import { db } from "../../lib/firebase";
 import Link from "next/link";
 
@@ -15,7 +15,7 @@ interface Newsletter {
     slug: string;
     heroImageUrl?: string;
     publishedAt: any;
-    excerpt?: string; // fallback if body is long
+    excerpt?: string;
 }
 
 export default function UserDashboard() {
@@ -23,6 +23,7 @@ export default function UserDashboard() {
     const router = useRouter();
     const [latestNewsletters, setLatestNewsletters] = useState<Newsletter[]>([]);
     const [fetching, setFetching] = useState(true);
+    const [requestStatus, setRequestStatus] = useState<"none" | "pending">("none");
 
     // Auth Guard
     useEffect(() => {
@@ -30,6 +31,18 @@ export default function UserDashboard() {
             router.push("/login");
         }
     }, [user, loading, router]);
+
+    // Check Admin Request Status
+    useEffect(() => {
+        if (!user) return;
+        const checkStatus = async () => {
+            const d = await getDoc(doc(db, "users", user.uid));
+            if (d.exists() && d.data().adminRequest) {
+                setRequestStatus("pending");
+            }
+        };
+        checkStatus();
+    }, [user]);
 
     // Fetch Latest Published Newsletters
     useEffect(() => {
@@ -67,18 +80,35 @@ export default function UserDashboard() {
             <div className="max-w-7xl mx-auto px-6 py-12">
 
                 {/* Hero / Welcome */}
-                <div className="mb-16 text-center">
-                    <h1 className="text-4xl md:text-5xl font-serif font-bold mb-4 tracking-tight">
-                        Welcome back, <span className="text-indigo-400">{user.displayName?.split(' ')[0] || "Reader"}</span>.
-                    </h1>
-                    <p className="text-neutral-400 text-lg max-w-2xl mx-auto">
-                        Your personalized feed of the latest stories and insights.
-                    </p>
+                <div className="mb-12 text-center md:text-left flex flex-col md:flex-row justify-between items-end gap-6">
+                    <div>
+                        <h1 className="text-4xl md:text-5xl font-serif font-bold mb-4 tracking-tight">
+                            Welcome back, <span className="text-indigo-400">{user.displayName?.split(' ')[0] || "Reader"}</span>.
+                        </h1>
+                        <p className="text-neutral-400 text-lg max-w-2xl">
+                            Your personalized feed of the latest stories and insights.
+                        </p>
+                    </div>
                 </div>
+
+                {/* Admin Request Status Alert */}
+                {requestStatus === "pending" && (
+                    <div className="mb-12 bg-yellow-900/10 border border-yellow-900/30 p-4 rounded-xl flex items-center gap-4">
+                        <div className="p-2 bg-yellow-900/20 rounded-full text-yellow-500 shrink-0">
+                            <Clock size={20} />
+                        </div>
+                        <div>
+                            <h3 className="text-yellow-500 font-medium text-sm">Publisher Access Requested</h3>
+                            <p className="text-sm text-yellow-900/80">
+                                Your application to become a publisher is being reviewed by our team.
+                            </p>
+                        </div>
+                    </div>
+                )}
 
                 {/* Quick Actions */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-16">
-                    <Link href="/newsletters" className="group p-6 bg-neutral-900/50 border border-neutral-800 rounded-2xl hover:bg-neutral-800 transition-all hover:border-neutral-700">
+                    <Link href="/newsletters" className="group p-6 bg-neutral-900/50 border border-neutral-800 rounded-2xl hover:bg-neutral-800 transition-all hover:border-neutral-700 hover:-translate-y-1">
                         <div className="w-12 h-12 bg-indigo-900/30 rounded-xl flex items-center justify-center text-indigo-400 mb-4 group-hover:scale-110 transition-transform">
                             <BookOpen size={24} />
                         </div>
@@ -86,7 +116,7 @@ export default function UserDashboard() {
                         <p className="text-sm text-neutral-500">Explore all published newsletters and archives.</p>
                     </Link>
 
-                    <Link href="/subscriptions" className="group p-6 bg-neutral-900/50 border border-neutral-800 rounded-2xl hover:bg-neutral-800 transition-all hover:border-neutral-700">
+                    <Link href="/subscriptions" className="group p-6 bg-neutral-900/50 border border-neutral-800 rounded-2xl hover:bg-neutral-800 transition-all hover:border-neutral-700 hover:-translate-y-1">
                         <div className="w-12 h-12 bg-pink-900/30 rounded-xl flex items-center justify-center text-pink-400 mb-4 group-hover:scale-110 transition-transform">
                             <Star size={24} />
                         </div>
@@ -94,7 +124,7 @@ export default function UserDashboard() {
                         <p className="text-sm text-neutral-500">Manage the content you follow.</p>
                     </Link>
 
-                    <Link href="/community" className="group p-6 bg-neutral-900/50 border border-neutral-800 rounded-2xl hover:bg-neutral-800 transition-all hover:border-neutral-700">
+                    <Link href="/community" className="group p-6 bg-neutral-900/50 border border-neutral-800 rounded-2xl hover:bg-neutral-800 transition-all hover:border-neutral-700 hover:-translate-y-1">
                         <div className="w-12 h-12 bg-emerald-900/30 rounded-xl flex items-center justify-center text-emerald-400 mb-4 group-hover:scale-110 transition-transform">
                             <Zap size={24} />
                         </div>
