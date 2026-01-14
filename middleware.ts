@@ -39,9 +39,16 @@ async function getUserRoleFromFirestore(token: string): Promise<string | null> {
     if (!token) return null;
 
     try {
+        const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
+        const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+
+        if (!apiKey || !projectId) {
+            console.error("Middleware Error: Missing Environment Variables");
+            return null;
+        }
+
         // 1. Verify token with Firebase Auth REST API (User Data) 
         // This confirms validity and gets us the UID
-        const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
         const authUrl = `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${apiKey}`;
 
         const authRes = await fetch(authUrl, {
@@ -50,14 +57,16 @@ async function getUserRoleFromFirestore(token: string): Promise<string | null> {
             body: JSON.stringify({ idToken: token })
         });
 
-        if (!authRes.ok) return null;
+        if (!authRes.ok) {
+            console.error("Middleware Auth Check Failed:", authRes.status, await authRes.text());
+            return null;
+        }
 
         const authData = await authRes.json();
         const uid = authData.users[0].localId;
 
         // 2. Fetch User Document from Firestore REST API
         // https://firestore.googleapis.com/v1/projects/{projectId}/databases/(default)/documents/users/{uid}
-        const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
         const firestoreUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${uid}`;
 
         // We can use the SAME token to authenticate the Firestore request if rules allow it!
@@ -67,7 +76,10 @@ async function getUserRoleFromFirestore(token: string): Promise<string | null> {
             }
         });
 
-        if (!firestoreRes.ok) return null; // Maybe rules blocked it or doesn't exist
+        if (!firestoreRes.ok) {
+            console.error("Middleware Firestore Check Failed:", firestoreRes.status); // likely 403 or 404
+            return null;
+        }
 
         const firestoreData = await firestoreRes.json();
         // Firestore REST API structure: { fields: { role: { stringValue: "admin" } } }
@@ -76,7 +88,7 @@ async function getUserRoleFromFirestore(token: string): Promise<string | null> {
         return role || "user";
 
     } catch (error) {
-        console.error("Middleware Auth Check Failed", error);
+        console.error("Middleware Exception", error);
         return null;
     }
 }

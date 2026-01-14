@@ -6,7 +6,7 @@ import { useAuth } from "@/context/AuthContext";
 import { db } from "@/lib/firebase";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { uploadToCloudinary } from "@/lib/cloudinary";
-import { Loader2, Upload, Image as ImageIcon, Save, ArrowLeft } from "lucide-react";
+import { Loader2, Upload, Save, ArrowLeft, Calendar, Image as ImageIcon, Eye } from "lucide-react";
 import Link from "next/link";
 
 export default function CreateNewsletter() {
@@ -21,9 +21,9 @@ export default function CreateNewsletter() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [status, setStatus] = useState<"draft" | "published">("draft");
 
-    // Guard (Client-side, usually handled by Layout/Middleware too)
+    // Guard (Client-side)
     if (role !== "admin" && role !== "super_admin") {
-        return null;
+        return null; // Layout handles redirect usually
     }
 
     const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -40,7 +40,9 @@ export default function CreateNewsletter() {
 
     const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setTitle(e.target.value);
-        setSlug(generateSlug(e.target.value));
+        if (!slug) { // Only auto-generate if slug is empty or user hasn't manually edited it (simplified check)
+            setSlug(generateSlug(e.target.value));
+        }
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -49,7 +51,6 @@ export default function CreateNewsletter() {
 
         try {
             let heroImageUrl = "";
-
             if (imageFile) {
                 heroImageUrl = await uploadToCloudinary(imageFile);
             }
@@ -70,108 +71,130 @@ export default function CreateNewsletter() {
             router.push("/admin/newsletters");
         } catch (error) {
             console.error("Error creating newsletter:", error);
-            alert("Failed to create newsletter. Check console.");
+            alert("Failed to create. Check console.");
         } finally {
             setIsSubmitting(false);
         }
     };
 
     return (
-        <div className="min-h-screen bg-black text-white p-8">
-            <div className="max-w-4xl mx-auto">
-                <div className="flex items-center gap-4 mb-8">
-                    <Link href="/admin/newsletters" className="p-2 hover:bg-neutral-800 rounded-full transition-colors">
-                        <ArrowLeft size={20} />
-                    </Link>
-                    <h1 className="text-3xl font-serif">New Newsletter</h1>
-                </div>
+        <div className="min-h-screen bg-black text-white">
+            <form onSubmit={handleSubmit} className="flex flex-col lg:flex-row h-screen overflow-hidden">
 
-                <form onSubmit={handleSubmit} className="space-y-8">
+                {/* LEFT: Editor Area (Scrollable) */}
+                <div className="flex-1 flex flex-col h-full overflow-y-auto border-r border-neutral-800">
 
-                    {/* Title & Slug */}
-                    <div className="space-y-4">
-                        <div>
-                            <label className="block text-sm font-medium text-neutral-400 mb-1">Title</label>
-                            <input
-                                type="text"
-                                value={title}
-                                onChange={handleTitleChange}
-                                className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-indigo-500 outline-none text-lg font-serif"
-                                placeholder="Enter newsletter title..."
-                                required
-                            />
+                    {/* Toolbar / Header */}
+                    <div className="sticky top-0 z-10 bg-black/80 backdrop-blur-md border-b border-neutral-800 p-4 flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                            <Link href="/admin/newsletters" className="p-2 text-neutral-400 hover:text-white rounded-full hover:bg-neutral-800 transition-colors">
+                                <ArrowLeft size={20} />
+                            </Link>
+                            <span className="text-sm font-medium text-neutral-500">Unsaved changes</span>
                         </div>
-                        <div>
-                            <label className="block text-sm font-medium text-neutral-400 mb-1">Slug (URL)</label>
-                            <input
-                                type="text"
-                                value={slug}
-                                onChange={(e) => setSlug(e.target.value)}
-                                className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-4 py-2 text-neutral-400 focus:ring-2 focus:ring-indigo-500 outline-none font-mono text-sm"
-                                required
-                            />
+                        <div className="lg:hidden">
+                            {/* Mobile Save Button if needed, or hide sidebar on mobile */}
                         </div>
                     </div>
 
-                    {/* Image Upload */}
+                    <div className="p-8 max-w-3xl mx-auto w-full">
+                        <input
+                            type="text"
+                            value={title}
+                            onChange={handleTitleChange}
+                            placeholder="Post Title"
+                            className="w-full bg-transparent text-4xl font-serif font-bold text-white placeholder-neutral-700 outline-none mb-6"
+                            required
+                        />
+
+                        <textarea
+                            value={content}
+                            onChange={(e) => setContent(e.target.value)}
+                            placeholder="Start writing your story..."
+                            className="w-full h-[calc(100vh-300px)] bg-transparent text-lg text-neutral-300 placeholder-neutral-700 outline-none resize-none leading-relaxed font-serif"
+                            required
+                        />
+                    </div>
+                </div>
+
+                {/* RIGHT: Settings Sidebar (Fixed width) */}
+                <div className="w-full lg:w-96 bg-neutral-900/30 h-full overflow-y-auto p-6 flex flex-col gap-8">
+
                     <div>
-                        <label className="block text-sm font-medium text-neutral-400 mb-2">Hero Image</label>
-                        <div className="border-2 border-dashed border-neutral-800 rounded-lg p-8 text-center hover:border-neutral-600 transition-colors relative group">
+                        <h3 className="text-xs font-bold text-neutral-500 uppercase tracking-widest mb-4">Publishing</h3>
+                        <div className="space-y-4">
+                            <div className="flex items-center justify-between bg-black p-3 rounded-lg border border-neutral-800">
+                                <span className="text-sm text-neutral-300">Status</span>
+                                <select
+                                    value={status}
+                                    onChange={(e) => setStatus(e.target.value as "draft" | "published")}
+                                    className="bg-neutral-900 text-white text-sm border-none outline-none rounded focus:ring-0 cursor-pointer"
+                                >
+                                    <option value="draft">Draft</option>
+                                    <option value="published">Published</option>
+                                </select>
+                            </div>
+
+                            <button
+                                type="submit"
+                                disabled={isSubmitting}
+                                className={`w-full py-3 rounded-lg font-medium flex items-center justify-center gap-2 transition-all ${status === 'published'
+                                        ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                                        : 'bg-white text-black hover:bg-neutral-200'
+                                    }`}
+                            >
+                                {isSubmitting ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
+                                {status === 'published' ? 'Publish Now' : 'Save Draft'}
+                            </button>
+                        </div>
+                    </div>
+
+                    <div>
+                        <h3 className="text-xs font-bold text-neutral-500 uppercase tracking-widest mb-4">Post Settings</h3>
+
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-xs font-medium text-neutral-400 mb-1.5">URL Slug</label>
+                                <div className="flex bg-black border border-neutral-800 rounded-lg overflow-hidden">
+                                    <span className="bg-neutral-900 text-neutral-500 px-3 py-2 text-xs border-r border-neutral-800 flex items-center">/</span>
+                                    <input
+                                        type="text"
+                                        value={slug}
+                                        onChange={(e) => setSlug(e.target.value)}
+                                        className="w-full bg-transparent px-3 py-2 text-sm text-neutral-300 outline-none font-mono"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <h3 className="text-xs font-bold text-neutral-500 uppercase tracking-widest mb-4">Featured Image</h3>
+                        <div className="border-2 border-dashed border-neutral-800 rounded-xl p-4 text-center hover:border-neutral-600 transition-colors relative group bg-black/50">
                             <input
                                 type="file"
                                 onChange={handleImageChange}
                                 accept="image/*"
-                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
                             />
                             {previewUrl ? (
-                                <div className="relative aspect-video max-w-md mx-auto overflow-hidden rounded-lg">
+                                <div className="relative aspect-video w-full overflow-hidden rounded-lg">
                                     <img src={previewUrl} alt="Preview" className="w-full h-full object-cover" />
+                                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <span className="text-xs text-white bg-black/80 px-2 py-1 rounded">Change Image</span>
+                                    </div>
                                 </div>
                             ) : (
-                                <div className="flex flex-col items-center justify-center text-neutral-500">
-                                    <Upload size={32} className="mb-2" />
-                                    <p>Click to upload or drag and drop</p>
-                                    <p className="text-xs text-neutral-600 mt-1">SVG, PNG, JPG or GIF (max. 5MB)</p>
+                                <div className="py-8 text-neutral-500">
+                                    <ImageIcon size={32} className="mx-auto mb-2 opacity-50" />
+                                    <p className="text-xs">Upload Hero Image</p>
                                 </div>
                             )}
                         </div>
                     </div>
 
-                    {/* Content Editor */}
-                    <div>
-                        <label className="block text-sm font-medium text-neutral-400 mb-1">Content</label>
-                        <textarea
-                            value={content}
-                            onChange={(e) => setContent(e.target.value)}
-                            className="w-full h-96 bg-neutral-900 border border-neutral-800 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-indigo-500 outline-none font-serif text-lg leading-relaxed resize-y"
-                            placeholder="Start writing your story..."
-                            required
-                        />
-                    </div>
-
-                    {/* Actions */}
-                    <div className="flex items-center justify-end gap-4 pt-8 border-t border-neutral-800">
-                        <select
-                            value={status}
-                            onChange={(e) => setStatus(e.target.value as "draft" | "published")}
-                            className="bg-neutral-900 border border-neutral-800 text-white rounded-lg px-4 py-2 outline-none cursor-pointer"
-                        >
-                            <option value="draft">Save as Draft</option>
-                            <option value="published">Publish Immediately</option>
-                        </select>
-
-                        <button
-                            type="submit"
-                            disabled={isSubmitting}
-                            className="bg-white text-black px-6 py-2 rounded-lg font-medium hover:bg-gray-200 transition-colors flex items-center gap-2 disabled:opacity-50"
-                        >
-                            {isSubmitting ? <Loader2 className="animate-spin" size={20} /> : <Save size={20} />}
-                            {status === "published" ? "Publish Newsletter" : "Save Draft"}
-                        </button>
-                    </div>
-
-                </form>
-            </div>
+                </div>
+            </form>
         </div>
     );
 }

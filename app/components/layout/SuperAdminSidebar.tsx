@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
-import { LayoutDashboard, Users, Shield, LogOut } from "lucide-react";
+import { LayoutDashboard, Users, Shield, LogOut, ClipboardList, UserCog } from "lucide-react";
 
 export default function SuperAdminSidebar() {
     const pathname = usePathname();
@@ -13,6 +13,8 @@ export default function SuperAdminSidebar() {
         { name: "Overview", href: "/super-admin", icon: <LayoutDashboard size={20} /> },
         { name: "Users", href: "/super-admin/users", icon: <Users size={20} /> },
         { name: "Roles & Permissions", href: "/super-admin/roles", icon: <Shield size={20} /> },
+        { name: "Audit Logs", href: "/super-admin/audit-logs", icon: <ClipboardList size={20} /> },
+        { name: "Profile", href: "/super-admin/profile", icon: <UserCog size={20} /> },
     ];
 
     return (
@@ -31,8 +33,8 @@ export default function SuperAdminSidebar() {
                             key={item.href}
                             href={item.href}
                             className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${isActive
-                                    ? "bg-red-900/20 text-red-500 border border-red-900/50"
-                                    : "text-neutral-400 hover:text-white hover:bg-neutral-900"
+                                ? "bg-red-900/20 text-red-500 border border-red-900/50"
+                                : "text-neutral-400 hover:text-white hover:bg-neutral-900"
                                 }`}
                         >
                             {item.icon}

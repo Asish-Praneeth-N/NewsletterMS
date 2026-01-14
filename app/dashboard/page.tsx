@@ -3,51 +3,56 @@
 import { useAuth } from "../../context/AuthContext";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { doc, updateDoc, onSnapshot } from "firebase/firestore";
+import { Loader2, ArrowRight, BookOpen, Star, Zap } from "lucide-react";
+import { UserNavbar } from "../components/layout/UserNavbar";
+import { collection, query, where, orderBy, limit, onSnapshot } from "firebase/firestore";
 import { db } from "../../lib/firebase";
-import { Loader2 } from "lucide-react";
+import Link from "next/link";
+
+interface Newsletter {
+    id: string;
+    title: string;
+    slug: string;
+    heroImageUrl?: string;
+    publishedAt: any;
+    excerpt?: string; // fallback if body is long
+}
 
 export default function UserDashboard() {
-    const { user, role, loading, logout } = useAuth();
+    const { user, role, loading } = useAuth();
     const router = useRouter();
-    const [requestStatus, setRequestStatus] = useState<"none" | "pending">("none");
+    const [latestNewsletters, setLatestNewsletters] = useState<Newsletter[]>([]);
+    const [fetching, setFetching] = useState(true);
 
+    // Auth Guard
     useEffect(() => {
-        if (!loading) {
-            if (!user) {
-                router.push("/login");
-            } else if (role === "admin") {
-                router.push("/admin");
-            } else if (role === "super_admin") {
-                router.push("/super-admin");
-            }
+        if (!loading && !user) {
+            router.push("/login");
         }
+    }, [user, loading, router]);
 
-        // Listen for adminRequest status
-        if (user) {
-            const unsub = onSnapshot(doc(db, "users", user.uid), (doc) => {
-                if (doc.exists() && doc.data().adminRequest) {
-                    setRequestStatus("pending");
-                } else {
-                    setRequestStatus("none");
-                }
+    // Fetch Latest Published Newsletters
+    useEffect(() => {
+        const q = query(
+            collection(db, "newsletters"),
+            where("status", "==", "published"),
+            orderBy("publishedAt", "desc"),
+            limit(3)
+        );
+
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const items: Newsletter[] = [];
+            snapshot.forEach((doc) => {
+                items.push({ id: doc.id, ...doc.data() } as Newsletter);
             });
-            return () => unsub();
-        }
-    }, [user, role, loading, router]);
+            setLatestNewsletters(items);
+            setFetching(false);
+        });
 
-    const handleRequestAdmin = async () => {
-        if (!user) return;
-        try {
-            await updateDoc(doc(db, "users", user.uid), {
-                adminRequest: true
-            });
-        } catch (err) {
-            console.error(err);
-        }
-    };
+        return () => unsubscribe();
+    }, []);
 
-    if (loading || !user || role !== "user") {
+    if (loading || !user) {
         return (
             <div className="min-h-screen bg-black flex items-center justify-center">
                 <Loader2 className="animate-spin text-white" size={32} />
@@ -56,59 +61,97 @@ export default function UserDashboard() {
     }
 
     return (
-        <div className="min-h-screen bg-black text-white p-8">
-            <div className="max-w-4xl mx-auto">
-                <div className="flex justify-between items-center mb-12 border-b border-white/10 pb-6">
-                    <div>
-                        <h1 className="text-3xl font-serif">Publisher Dashboard</h1>
-                        <p className="text-neutral-500">Manage your subscriptions and bookmarks.</p>
-                    </div>
-                    <button
-                        onClick={() => logout()}
-                        className="text-sm text-neutral-400 hover:text-white transition-colors"
-                    >
-                        Sign Out
-                    </button>
+        <div className="min-h-screen bg-black text-white selection:bg-indigo-500/30">
+            <UserNavbar />
+
+            <div className="max-w-7xl mx-auto px-6 py-12">
+
+                {/* Hero / Welcome */}
+                <div className="mb-16 text-center">
+                    <h1 className="text-4xl md:text-5xl font-serif font-bold mb-4 tracking-tight">
+                        Welcome back, <span className="text-indigo-400">{user.displayName?.split(' ')[0] || "Reader"}</span>.
+                    </h1>
+                    <p className="text-neutral-400 text-lg max-w-2xl mx-auto">
+                        Your personalized feed of the latest stories and insights.
+                    </p>
                 </div>
 
-                <div className="grid gap-8">
-                    {/* Placeholder Content */}
-                    <div className="p-12 border border-neutral-800 rounded-lg text-center bg-neutral-900/30">
-                        <h3 className="text-xl font-medium mb-2 text-neutral-300">No active subscriptions</h3>
-                        <p className="text-neutral-500 mb-6">Explore the community to find newsletters you love.</p>
-                        <button className="px-6 py-2 bg-white text-black rounded font-medium hover:bg-gray-200">
-                            Explore
-                        </button>
+                {/* Quick Actions */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-16">
+                    <Link href="/newsletters" className="group p-6 bg-neutral-900/50 border border-neutral-800 rounded-2xl hover:bg-neutral-800 transition-all hover:border-neutral-700">
+                        <div className="w-12 h-12 bg-indigo-900/30 rounded-xl flex items-center justify-center text-indigo-400 mb-4 group-hover:scale-110 transition-transform">
+                            <BookOpen size={24} />
+                        </div>
+                        <h3 className="text-xl font-bold mb-2">Browse Library</h3>
+                        <p className="text-sm text-neutral-500">Explore all published newsletters and archives.</p>
+                    </Link>
+
+                    <Link href="/subscriptions" className="group p-6 bg-neutral-900/50 border border-neutral-800 rounded-2xl hover:bg-neutral-800 transition-all hover:border-neutral-700">
+                        <div className="w-12 h-12 bg-pink-900/30 rounded-xl flex items-center justify-center text-pink-400 mb-4 group-hover:scale-110 transition-transform">
+                            <Star size={24} />
+                        </div>
+                        <h3 className="text-xl font-bold mb-2">My Subscriptions</h3>
+                        <p className="text-sm text-neutral-500">Manage the content you follow.</p>
+                    </Link>
+
+                    <Link href="/community" className="group p-6 bg-neutral-900/50 border border-neutral-800 rounded-2xl hover:bg-neutral-800 transition-all hover:border-neutral-700">
+                        <div className="w-12 h-12 bg-emerald-900/30 rounded-xl flex items-center justify-center text-emerald-400 mb-4 group-hover:scale-110 transition-transform">
+                            <Zap size={24} />
+                        </div>
+                        <h3 className="text-xl font-bold mb-2">Community</h3>
+                        <p className="text-sm text-neutral-500">Join discussions and connect with readers.</p>
+                    </Link>
+                </div>
+
+                {/* Latest Newsletters */}
+                <div className="mb-12">
+                    <div className="flex items-center justify-between mb-8">
+                        <h2 className="text-2xl font-serif font-bold">Latest Stories</h2>
+                        <Link href="/newsletters" className="text-sm text-indigo-400 hover:text-indigo-300 flex items-center gap-1">
+                            View all <ArrowRight size={14} />
+                        </Link>
                     </div>
 
-                    {/* Admin Access Request Block */}
-                    <div className="border-t border-neutral-800 pt-8 mt-4">
-                        <h3 className="text-lg font-medium mb-4">Publisher Status</h3>
+                    {fetching ? (
+                        <div className="flex justify-center py-12"><Loader2 className="animate-spin text-neutral-600" /></div>
+                    ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                            {latestNewsletters.map((post) => (
+                                <Link key={post.id} href={`/newsletter/${post.slug}`} className="group block">
+                                    <div className="bg-neutral-900/30 border border-neutral-800 rounded-2xl overflow-hidden hover:border-neutral-600 transition-all h-full flex flex-col">
+                                        <div className="aspect-video bg-neutral-800 relative overflow-hidden">
+                                            {post.heroImageUrl ? (
+                                                <img src={post.heroImageUrl} alt={post.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                                            ) : (
+                                                <div className="w-full h-full flex items-center justify-center text-neutral-700">
+                                                    <BookOpen size={32} />
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="p-6 flex-1 flex flex-col">
+                                            <div className="text-xs text-indigo-400 font-medium uppercase tracking-wider mb-2">
+                                                {post.publishedAt ? new Date(post.publishedAt.seconds * 1000).toLocaleDateString() : "New"}
+                                            </div>
+                                            <h3 className="text-xl font-bold mb-3 group-hover:text-indigo-300 transition-colors leading-tight">
+                                                {post.title}
+                                            </h3>
+                                            <div className="mt-auto pt-4 flex items-center text-sm text-neutral-500 font-medium">
+                                                Read Article <ArrowRight size={14} className="ml-2 group-hover:translate-x-1 transition-transform" />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </Link>
+                            ))}
 
-                        <div className="flex items-center justify-between p-4 bg-neutral-900/50 rounded-lg border border-neutral-800">
-                            <div>
-                                <h4 className="font-medium text-white mb-1">Interested in publishing?</h4>
-                                <p className="text-sm text-neutral-500">
-                                    {requestStatus === "pending"
-                                        ? "Your request is under review by a Super Admin."
-                                        : "Request admin access to start creating your own newsletters."}
-                                </p>
-                            </div>
-                            {requestStatus === "pending" ? (
-                                <span className="px-4 py-2 bg-yellow-900/20 text-yellow-500 border border-yellow-900/50 rounded text-sm font-medium">
-                                    Pending Review
-                                </span>
-                            ) : (
-                                <button
-                                    onClick={handleRequestAdmin}
-                                    className="px-4 py-2 bg-indigo-900/30 text-indigo-400 border border-indigo-900 rounded hover:bg-indigo-900/50 transition-colors text-sm font-medium"
-                                >
-                                    Request Access
-                                </button>
+                            {latestNewsletters.length === 0 && (
+                                <div className="col-span-full py-12 text-center text-neutral-500 bg-neutral-900/20 rounded-2xl border border-dashed border-neutral-800">
+                                    No newsletters published yet. Check back soon!
+                                </div>
                             )}
                         </div>
-                    </div>
+                    )}
                 </div>
+
             </div>
         </div>
     );

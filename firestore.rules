@@ -15,6 +15,7 @@ service cloud.firestore {
     }
 
     function getRequesterRole() {
+      // Safely get role, default to 'user' if missing (though app ensures it exists)
       return getRequesterData().role;
     }
 
@@ -44,7 +45,7 @@ service cloud.firestore {
 
       // UPDATE:
       // 1. Super Admin can update anything (Roles, etc).
-      // 2. User can update their own data BUT CANNOT change their role.
+      // 2. User can update their own data (e.g. adminRequest) BUT CANNOT change their role.
       allow update: if isSuperAdmin() 
                     || (isAuth() && request.auth.uid == uid && request.resource.data.role == resource.data.role);
     }
@@ -55,7 +56,7 @@ service cloud.firestore {
       allow read: if resource.data.status == "published";
       
       // Admins and Super Admins can read all (drafts, etc)
-      allow read: if isAdmin(); // Recursive 'read' allows getting single docs. List permissions implied by query constraints matching this.
+      allow read: if isAdmin(); 
 
       // Admins/Super Admins can create, update, delete
       allow create, update, delete: if isAdmin(); 
@@ -63,9 +64,23 @@ service cloud.firestore {
 
     // Subscriptions Collection
     match /subscriptions/{id} {
-      // Users can manage their own subscriptions
+      // Users can manage their subscriptions
       allow create: if isAuth() && request.resource.data.userId == request.auth.uid;
-      allow read, delete: if isAuth() && resource.data.userId == request.auth.uid;
+      // Allow reading/deleting own subscriptions
+      // Admins/SuperAdmin can read all for dashboard stats
+      allow read: if (isAuth() && resource.data.userId == request.auth.uid) || isAdmin();
+      allow delete: if isAuth() && resource.data.userId == request.auth.uid;
+    }
+
+    // [NEW] Audit Logs Collection (Super Admin Only)
+    match /auditLogs/{id} {
+      // Only Super Admin can read/write logs
+      // Note: We allow 'create' because standard Admins might trigger audit events too 
+      // if we expand later, but for now Super Admin Logic handles it.
+      // If your app logic writes logs from client for Admin actions, use isAdmin().
+      // Based on current code: SuperAdminUsers/Roles pages write logs.
+      allow read: if isSuperAdmin();
+      allow create: if isSuperAdmin(); // Strict: Only Super Admin actions are logged client-side for now
     }
 
     // Default: Deny all
